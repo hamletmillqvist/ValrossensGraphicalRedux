@@ -575,20 +575,40 @@ PixelShader =
 				vHeightNormalSample_snow = CalcNormalForLighting( vHeightNormalSample_snow, normalize( vTerrainNormalSample_snow ) );
 				vTerrainDiffuseSample.rgb = ApplySnow( vTerrainDiffuseSample.rgb, Input.prepos, vHeightNormalSample_snow, vFoWColor, FoWDiffuse );
 
-				// Apply blend
-				float2 vBlend = float2( 0.4f, 0.45f );
-				vOut = ( dot( vTerrainDiffuseSample.rgb, GREYIFY ) * vBlend.x + vColorMapSample.rgb * vBlend.y );
+				// Apply blending between terrain and mapmode
+				float2 blend = float2( 0.57f, 0.30f ); // Opacity of mapmode and terrain
+				float3 vBlendMapMode = float3(vColorMapSample);
+				float3 vBlendTerrain = float3(vTerrainDiffuseSample);
 
-				// "flux" parameters, turns the map ever so slightly yellow / warm
-				float3 vBlend_flux = float3( 1.04f, 1.0f, 0.96f );
-				vOut = vOut.rgb * vBlend_flux.rgb;
+				float vTerrainDiffuseSample_green = min( vTerrainDiffuseSample.g * 2.0f + 0.2f, 1.0f);
+				float vTerrainDiffuseSample_grey = min( ( 0.2989f * vTerrainDiffuseSample.r + 0.5870f * vTerrainDiffuseSample.g + 0.1140f * vTerrainDiffuseSample.b), 0.7f );
 
-				// Clamped light calculation
+				vBlendMapMode = vBlendMapMode * vTerrainDiffuseSample_green * blend.x;
+				vBlendTerrain = vBlendTerrain * vTerrainDiffuseSample_grey * blend.y;
+
+				vOut = vBlendMapMode.rgb + vBlendTerrain.rgb;
+
+				// Apply "flux" parameters, turns the map ever so slightly yellow / warm
+				float3 vBlend_flux = float3( 1.02f, 1.0f, 0.98f );
+				vOut = vOut * vBlend_flux;
+
+				// Clamp calculation results
 				vOut = float3( 	
 					min( vOut.r , 1.0f ),
 					min( vOut.g , 1.0f ),
 					min( vOut.b , 1.0f ));
-				vOut = CalculateMapLighting( vOut, vHeightNormalSample );
+				
+				// Apply "de-plastification"
+				float2 vBlend_normal = float2( 0.2f, 0.8f );
+				float3 vHeightNormalSample_adj = normalize( tex2D( HeightNormal, Input.uv2 ).rbg - 0.5f ) * vBlend_normal.x + ( 1.0f - vBlend_normal.x );
+				float3 vTerrainNormalSample_adj = ( tex2Dlod( TerrainNormal, vTerrainSamplePosition ).rbg - 0.5f ) * vBlend_normal.y + ( 1.0f - vBlend_normal.y );
+
+				vBlend_normal = float2( 0.2f, 2.0f );
+				vHeightNormalSample_adj = CalcNormalForLighting( vHeightNormalSample * vBlend_normal.x, normalize( vTerrainNormalSample_adj ) * vBlend_normal.y );
+
+				vBlend_normal = float2( 0.75f, 0.35f );
+				float3 vOut2 = CalculateMapLighting( vOut, vHeightNormalSample_adj );
+				vOut = vOut * vBlend_normal.x + vOut2 * vBlend_normal.y;
 
 				// Clamps the color to not entirely blinding white in certain countries
 				vOut = float3( 	
