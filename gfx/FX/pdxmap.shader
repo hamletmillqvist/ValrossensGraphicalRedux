@@ -584,6 +584,11 @@ PixelShader =
 				float colorClampMax = 0.80f;
 				float finalClampMax = 1.0f;
 
+				// Constants for greyscale conversion
+				float greyRedWeight = 0.2989f;
+				float greyGreenWeight = 0.5870f;
+				float greyBlueWeight = 0.1140f;
+
 				// Apply overlay color to the terrain
 				vTerrainDiffuseSample.rgb = GetOverlay(vTerrainDiffuseSample.rgb, TerrainColor, overlayAlpha);
 
@@ -600,7 +605,7 @@ PixelShader =
 
 				// Adjust terrain green channel and convert to greyscale
 				float vTerrainDiffuseSample_green = min(vTerrainDiffuseSample.g * greenChannelMultiplier + greenChannelOffset, finalClampMax);
-				float vTerrainDiffuseSample_grey = min((0.2989f * vTerrainDiffuseSample.r + 0.5870f * vTerrainDiffuseSample.g + 0.1140f * vTerrainDiffuseSample.b), greyscaleMaxValue);
+				float vTerrainDiffuseSample_grey = min((greyRedWeight * vTerrainDiffuseSample.r + greyGreenWeight * vTerrainDiffuseSample.g + greyBlueWeight * vTerrainDiffuseSample.b), greyscaleMaxValue);
 
 				// Apply blending
 				vBlendMapMode = vBlendMapMode * vTerrainDiffuseSample_green * blend.x;
