@@ -565,58 +565,38 @@ PixelShader =
 			else
 		#endif
 	        {
-	            vTerrainDiffuseSample.rgb = GetOverlay( vTerrainDiffuseSample.rgb, TerrainColor, 0.5f );
+				// ==== A lot of magic numbers in here, I guess for look-and-feel preference of 'Useful Raccoon' ====
 
-	            // Adjusts the normal, to also use a bit of the texture normal, and not only the heighmap of the mesh
-	            float2 vBlend_normal = float2( 0.2f, 0.8f );
+				vTerrainDiffuseSample.rgb = GetOverlay( vTerrainDiffuseSample.rgb, TerrainColor, 0.5f );
 
-	            float3 vHeightNormalSample_adj = normalize( tex2D( HeightNormal, Input.uv2 ).rbg - 0.5f ) * vBlend_normal.x + ( 1.0f - vBlend_normal.x );
-	            float3 vTerrainNormalSample_adj = ( tex2Dlod( TerrainNormal, vTerrainSamplePosition ).rbg - 0.5f ) * vBlend_normal.y + ( 1.0f - vBlend_normal.y );
+				// Visible snow
+				float3 vHeightNormalSample_snow = normalize( tex2D( HeightNormal, Input.uv2 ).rbg - 0.5f );
+				float3 vTerrainNormalSample_snow = tex2Dlod( TerrainNormal, vTerrainSamplePosition ).rbg - 0.5f;
+				vHeightNormalSample_snow = CalcNormalForLighting( vHeightNormalSample_snow, normalize( vTerrainNormalSample_snow ) );
+				vTerrainDiffuseSample.rgb = ApplySnow( vTerrainDiffuseSample.rgb, Input.prepos, vHeightNormalSample_snow, vFoWColor, FoWDiffuse );
 
-	            float2 vBlend_normal2 = float2( 0.2f, 2.0f );
-	            vHeightNormalSample_adj = CalcNormalForLighting( vHeightNormalSample * vBlend_normal2.x, normalize( vTerrainNormalSample_adj ) * vBlend_normal2.y );
+				// Apply blend
+				float2 vBlend = float2( 0.4f, 0.45f );
+				vOut = ( dot( vTerrainDiffuseSample.rgb, GREYIFY ) * vBlend.x + vColorMapSample.rgb * vBlend.y );
 
-	            // Handle snow, if you don't want snow, add comments to line 592-593
-	            float3 vHeightNormalSample_snow = normalize( tex2D( HeightNormal, Input.uv2 ).rbg - 0.5f );
-	            float3 vTerrainNormalSample_snow = tex2Dlod( TerrainNormal, vTerrainSamplePosition ).rbg - 0.5f;
-	            vHeightNormalSample_snow = CalcNormalForLighting( vHeightNormalSample_snow, normalize( vTerrainNormalSample_snow ) );
+				// "flux" parameters, turns the map ever so slightly yellow / warm
+				float3 vBlend_flux = float3( 1.04f, 1.0f, 0.96f );
+				vOut = vOut.rgb * vBlend_flux.rgb;
 
-	            // Applies snow
-	            vTerrainDiffuseSample.rgb = ApplySnow( vTerrainDiffuseSample.rgb, Input.prepos, vHeightNormalSample_snow, vFoWColor, FoWDiffuse );
-	            vTerrainDiffuseSample.rgb = calculate_secondary_compressed( Input.uv, vTerrainDiffuseSample.rgb, Input.prepos.xz );
+				// Clamped light calculation
+				vOut = float3( 	
+					min( vOut.r , 1.0f ),
+					min( vOut.g , 1.0f ),
+					min( vOut.b , 1.0f ));
+				vOut = CalculateMapLighting( vOut, vHeightNormalSample );
 
-	            // "flux" parameters, turns the map ever so slightly yellow / warm
-	            float3 vBlend_flux = float3( 1.02f, 1.0f, 0.98f );
+				// Clamps the color to not entirely blinding white in certain countries
+				vOut = float3( 	
+					min( vOut.r, 0.80f ),
+					min( vOut.g, 0.80f ),
+					min( vOut.b, 0.80f ));
 
-	            // Gets the modified color for the mapmode
-	            float3 vColorMapSample_blended = vColorMapSample;
-
-	            // Samples the green channel in the terrain, and adjusts accordingly
-	            float vTerrainDiffuseSample_green = min( vTerrainDiffuseSample.g * 2.0f + 0.2f, 1.0f);
-
-	            // Converts the terrain to greyscale
-	            float vTerrainDiffuseSample_grey = min( ( 0.2989f * vTerrainDiffuseSample.r + 0.5870f * vTerrainDiffuseSample.g + 0.1140f * vTerrainDiffuseSample.b), 0.7f );
-
-	            // Makes a blend adjustment between country color and greyscale color
-	            float2 vBlend_saturation = float2( 0.57f, 0.30f );
-
-	            // Calculates the combined mapmode and terraincolor
-	            vOut = float3(  min( ( vColorMapSample_blended.r * vBlend_saturation.x * vTerrainDiffuseSample_green + vTerrainDiffuseSample_grey * vBlend_saturation.y ) * vBlend_flux.r , 1.0f ) ,
-	                            min( ( vColorMapSample_blended.g * vBlend_saturation.x * vTerrainDiffuseSample_green + vTerrainDiffuseSample_grey * vBlend_saturation.y ) * vBlend_flux.g , 1.0f ) ,
-	                            min( ( vColorMapSample_blended.b * vBlend_saturation.x * vTerrainDiffuseSample_green + vTerrainDiffuseSample_grey * vBlend_saturation.y ) * vBlend_flux.b , 1.0f ) );
-
-	            // Combines the calculated colors with the normal shading, by taking percentages of each part and adding
-	            float2 vBlend_normal3 = float2( 0.75f, 0.35f );
-	            float3 vOut2 = CalculateMapLighting( vOut, vHeightNormalSample_adj );
-	            vOut = vOut * vBlend_normal3.x + vOut2 * vBlend_normal3.y;
-
-	            // Clamps the color to not entirely blinding white in certain countries
-	            vOut = float3( 	min( vOut.r, 0.80f ) ,
-	                min( vOut.g, 0.80f ) ,
-	                min( vOut.b, 0.80f ) );
-
-	            // No clue what this line does, was in the original shader so kept it
-	            vOut = calculate_secondary( Input.uv, vOut, Input.prepos.xz );
+				vOut = calculate_secondary( Input.uv, vOut, Input.prepos.xz );
 	        }
 	#endif	// end COLOR_SHADER
 
