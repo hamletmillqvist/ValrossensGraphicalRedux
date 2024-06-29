@@ -600,8 +600,19 @@ PixelShader =
 
 				// Define blend factors for terrain and mapmode
 				float2 blend = float2(mapModeBlendOpacity, terrainBlendOpacity); // Opacity of mapmode and terrain
+
+#ifdef PDX_OPENGL
+				float3 vBlendMapMode = float3(vColorMapSample);
+#else
 				float3 vBlendMapMode = vColorMapSample;
+#endif
+
+#ifdef PDX_OPENGL
+				float3 vBlendTerrain = float3(vTerrainDiffuseSample);
+#else
 				float3 vBlendTerrain = vTerrainDiffuseSample;
+#endif
+
 
 				// Adjust terrain green channel and convert to greyscale
 				float vTerrainDiffuseSample_green = min(vTerrainDiffuseSample.g * greenChannelMultiplier + greenChannelOffset, finalClampMax);
